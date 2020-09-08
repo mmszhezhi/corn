@@ -132,7 +132,7 @@ class LaiModel(utils):
         checkpoint = ModelCheckpoint(filepath, period=1, monitor='mean_squared_error', verbose=1, save_best_only=False,
                                      mode='max')
         callbacks_list = [checkpoint]
-        self.model1.fit_generator(train_gen,2,3,validation_data=val_gen,validation_steps=self.val_steps,callbacks=callbacks_list)
+        self.model1.fit_generator(train_gen,self.steps,20,validation_data=val_gen,validation_steps=self.val_steps,callbacks=callbacks_list)
         t2 = time.time()
         print(f"process time {t1}-{t2}, total {t2 - t1}")
         model_json = self.model1.to_json()
@@ -164,7 +164,10 @@ class LaiModel(utils):
                 break
         df = pd.DataFrame({"label":l,"predict":p})
         df.to_csv("predict.csv")
-
+    #
+    # def process_img(self):
+    #     for img_path in glob.glob(f"{self.src}/*"):
+    #         cv2.imread(img_path)
 
     def encode(self):
         vgg_conv = vgg16.VGG16(weights='imagenet', include_top=False)
@@ -232,7 +235,7 @@ class LaiModel(utils):
 df = pd.DataFrame({"data":np.random.normal(1,2,100),"id":[1]*50 + [2]*50})
 if __name__ == '__main__':
     model = LaiModel()
-    # model.train_vgg()
+    model.train_vgg()
     model.evaluate()
     # model.encode()
     # gen = model.img_gen()
