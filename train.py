@@ -17,6 +17,7 @@ from keras.layers import Dense,Activation,BatchNormalization,Conv2D,MaxPooling2D
 from keras import Sequential
 from keras import optimizers
 import time
+import math
 from keras.models import model_from_json
 from keras.callbacks import ModelCheckpoint
 param_grid = {
@@ -27,9 +28,9 @@ param_grid = {
     'n_estimators': [10,50,100,150,200]
 }
 
-
-
-
+import logging
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
 class LaiModel(utils):
 
     def __init__(self,batch_size=10,src="../imgandlai/augdata",test_set="../imgandlai/test"):
@@ -104,11 +105,24 @@ class LaiModel(utils):
         self.model1 = model
         return model
 
-    def img_gen(self,dsrc,steps,length):
-        while True:
+    def img_gen(self,dsrc,batch_size,epochs=-1):
+        """
+        generate batch of images constantly
+        :param epochs: -1 infinit iteration
+        :param batch_size:
+        :param dsrc: list of image file or directory of images
+        :return:
+        """
+        dsrc = dsrc if isinstance(dsrc,list) else glob.glob(f"{dsrc}/*")
+        assert isinstance(dsrc,list) and len(dsrc) >0 ,"empty diretory error"
+        length = len(dsrc)
+        steps = math.ceil(length//batch_size)
+        while epochs!=0:
+            epochs-=1
+            logging.debug(f"epoch count {epochs if epochs // 1 ==0 else 'infinit'}")
             for i in range(steps):
-                start = i * self.batch_size
-                end = (i + 1) * self.batch_size
+                start = i * batch_size
+                end = (i + 1) * batch_size
                 batch = dsrc[start:min(end, length)]
                 temp = []
                 tname = []
@@ -124,15 +138,20 @@ class LaiModel(utils):
                 except Exception as e:
                     print(repr(e))
 
-    def train_vgg(self):
-        train_gen = self.img_gen(self.total,self.steps,self.length)
-        val_gen = self.img_gen(self.test_set,self.val_steps,self.val_length)
+    def train_vgg(self,epochs,store_dir="ws",period=1):
+        """
+        train a regerssion model base on vgg16
+        :return:
+        """
+        train_gen = self.img_gen(self.total,self.batch_size)
+        val_gen = self.img_gen(self.test_set,self.batch_size)
         t1 = time.time()
-        filepath = "ws/weights-improvement-{epoch:02d}-{mean_squared_error:.2f}.h5"
-        checkpoint = ModelCheckpoint(filepath, period=1, monitor='mean_squared_error', verbose=1, save_best_only=False,
+        filepath = "{}/weights-improvement-{epoch:02d}-{val_mean_squared_error:.2f}.h5".format(store_dir)
+        checkpoint = ModelCheckpoint(filepath, period=period, monitor='val_mean_squared_error', verbose=1, save_best_only=False,
                                      mode='max')
         callbacks_list = [checkpoint]
-        self.model1.fit_generator(train_gen,self.steps,20,validation_data=val_gen,validation_steps=self.val_steps,callbacks=callbacks_list)
+        print(f"training start \n store dir {filepath}")
+        self.model1.fit_generator(train_gen,self.steps,epochs,validation_data=val_gen,validation_steps=self.val_steps,callbacks=callbacks_list)
         t2 = time.time()
         print(f"process time {t1}-{t2}, total {t2 - t1}")
         model_json = self.model1.to_json()
@@ -150,24 +169,25 @@ class LaiModel(utils):
                       metrics=['mean_squared_error'])
         return model
 
-    def evaluate(self):
-        model = self.load_model("m1","ws/w1.h5")  # type Sequential
-
-        val_gen = self.img_gen(self.test_set, self.val_steps, self.val_length)
+    def evaluate(self,w,test_set,batch_size=3):
+        """
+        evaluate given model on give test set
+        :param test_set: give test set list of image file or image directory
+        :param w: given model weight
+        :param threshold:
+        :return:
+        """
+        model = self.load_model("m1",f"ws/{w}.h5")  # type Sequential
+        val_gen = self.img_gen(test_set,batch_size,1)
         l,p = [],[]
         for data,labes in val_gen:
             predicts = model.predict(data)
             print(predicts)
             p.extend([x[0] for x in predicts])
             l.extend(labes)
-            if len(l) >20:
-                break
         df = pd.DataFrame({"label":l,"predict":p})
-        df.to_csv("predict.csv")
-    #
-    # def process_img(self):
-    #     for img_path in glob.glob(f"{self.src}/*"):
-    #         cv2.imread(img_path)
+        mse = np.sum((df["label"] - df["predict"])**2)/21
+        df.to_csv(f"{w}-{mse}-predict.csv")
 
     def encode(self):
         vgg_conv = vgg16.VGG16(weights='imagenet', include_top=False)
@@ -235,8 +255,8 @@ class LaiModel(utils):
 df = pd.DataFrame({"data":np.random.normal(1,2,100),"id":[1]*50 + [2]*50})
 if __name__ == '__main__':
     model = LaiModel()
-    model.train_vgg()
-    model.evaluate()
+    # model.train_vgg()
+    model.evaluate("weights-improvement-12-0.05",model.test_set)
     # model.encode()
     # gen = model.img_gen()
     # a,b = next(gen)
