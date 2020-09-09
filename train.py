@@ -146,7 +146,7 @@ class LaiModel(utils):
         train_gen = self.img_gen(self.total,self.batch_size)
         val_gen = self.img_gen(self.test_set,self.batch_size)
         t1 = time.time()
-        filepath = "{}/weights-improvement-{epoch:02d}-{val_mean_squared_error:.2f}.h5".format(store_dir)
+        filepath = store_dir + "/weights-improvement-{epoch:02d}-{val_mean_squared_error:.2f}.h5"
         checkpoint = ModelCheckpoint(filepath, period=period, monitor='val_mean_squared_error', verbose=1, save_best_only=False,
                                      mode='max')
         callbacks_list = [checkpoint]
@@ -248,15 +248,11 @@ class LaiModel(utils):
             yield self.flatten_batch(batch),self.name2label(batch_l)
 
 
-
-
-
-
 df = pd.DataFrame({"data":np.random.normal(1,2,100),"id":[1]*50 + [2]*50})
 if __name__ == '__main__':
     model = LaiModel()
-    # model.train_vgg()
-    model.evaluate("weights-improvement-12-0.05",model.test_set)
+    model.train_vgg(12)
+    # model.evaluate("weights-improvement-12-0.05",model.test_set)
     # model.encode()
     # gen = model.img_gen()
     # a,b = next(gen)
