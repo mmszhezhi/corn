@@ -24,8 +24,7 @@ class utils:
         sum_ratio_02 = ratio_02.sum(axis=2)
         f_channel = 0.08*img[:, :, 0] /sumation
         l_channel = 0.08*img[:, :, 2] /sumation
-
-        im = np.clip(ratio_1 / sum_ratio_02 / 3, 0, 1)
+        im = np.clip(ratio_1 / (sum_ratio_02 +0.00001), 0, 1)
         im[im < 0.195] = 0
         return np.stack((f_channel,im,l_channel),axis=2)
 

@@ -5,6 +5,7 @@ import cv2
 from keras.applications import vgg16
 import pandas as pd
 import tensorflow as tf
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 from tensorflow.keras.losses import MSE
 from tensorflow.compat.v1 import ConfigProto
 from tensorflow.compat.v1 import InteractiveSession
@@ -137,7 +138,10 @@ class LaiModel(utils):
                         iname = img.split("\\")[-1].split("-")[0]
                         tlabels.append(self.name2lai[iname])
                         tname.append(iname)
-                    yield np.concatenate(temp),np.array(tlabels).reshape([-1,1]) if not img_no else  np.concatenate(temp),np.array(tlabels).reshape([-1,1]),tname
+                    if img_no:
+                        yield np.concatenate(temp), np.array(tlabels).reshape([-1, 1]), tname
+                    else:
+                        yield np.concatenate(temp),np.array(tlabels).reshape([-1,1])
                 except Exception as e:
                     print(repr(e))
 
@@ -183,15 +187,12 @@ class LaiModel(utils):
         model = self.load_model("m1",f"ws/{w}.h5")  # type Sequential
         val_gen = self.img_gen(test_set,batch_size,1,img_no=True)
         l,p,no = [],[],[]
-        for data,f,labes,nos in val_gen:
+        for data,labes,nos in val_gen:
             predicts = model.predict(data)
-            # print(predicts)
             p.extend([x[0] for x in predicts])
             l.extend([x[0] for x in labes])
             no.extend(nos)
-            # break
         df = pd.DataFrame({"img_no":no,"label":l,"predict":p})
-        # mse = np.sum((df["label"] - df["predict"])**2)/21
         mse = tf.keras.losses.mean_squared_error(df["label"],df["predict"])
         subd = str.split(test_set, '\\')[-1]
         subd = str.split(subd, '/')[-1]
@@ -265,8 +266,8 @@ class LaiModel(utils):
 df = pd.DataFrame({"data":np.random.normal(1,2,100),"id":[1]*50 + [2]*50})
 if __name__ == '__main__':
     model = LaiModel()
-    model.train_vgg(12,"../imgandlai/augdata3","../imgandlai/test")
-    # model.evaluate("12-0.11","../imgandlai/test0")
+    # model.train_vgg(12,"../imgandlai/augdata3","../imgandlai/test")
+    model.evaluate("12-0.11","../imgandlai/test0")
     # model.evaluate_multi_dir("12-0.11","../imgandlai")
     # model.encode()
     # gen = model.img_gen()
