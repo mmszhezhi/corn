@@ -265,8 +265,8 @@ class LaiModel(utils):
 df = pd.DataFrame({"data":np.random.normal(1,2,100),"id":[1]*50 + [2]*50})
 if __name__ == '__main__':
     model = LaiModel()
-    # model.train_vgg(12,"../imgandlai/augdata3","../imgandlai/test")
-    model.evaluate("12-0.11","../imgandlai/test0")
+    model.train_vgg(12,"../imgandlai/augdata3","../imgandlai/test")
+    # model.evaluate("12-0.11","../imgandlai/test0")
     # model.evaluate_multi_dir("12-0.11","../imgandlai")
     # model.encode()
     # gen = model.img_gen()
