@@ -65,7 +65,7 @@ def gen_batches_h(files,scale):
 if __name__ == '__main__':
     scale = 2
     src = "../../imgandlai/source"
-    dst = "../../imgandlai/augdata3"
+    dst = "../../imgandlai/augdata4"
     os.makedirs(dst,exist_ok=True)
     source_dir = sys.argv[1] if len(sys.argv) == 3 else src
     target_dir = sys.argv[2] if len(sys.argv) == 3 else dst

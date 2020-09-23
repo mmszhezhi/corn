@@ -11,9 +11,10 @@ class utils:
         img[:, :,1 ] += s
         img[:, :, 2] += t
         return img
-    def green_scaling(self,img:np.ndarray):
+
+    def green_scaling(self,img:np.ndarray,trans=False):
         assert img.dtype == np.uint8
-        if img.shape[0] < img.shape[1]:
+        if trans and img.shape[0] > img.shape[1]:
             img = img.transpose(1,0,2)
         sumation = img.sum(axis=2)
         ratio_02 = np.stack([img[:,:,0] / sumation,img[:,:,2]/sumation],axis=2)
@@ -24,8 +25,9 @@ class utils:
         sum_ratio_02 = ratio_02.sum(axis=2)
         f_channel = 0.08*img[:, :, 0] /sumation
         l_channel = 0.08*img[:, :, 2] /sumation
-        im = np.clip(ratio_1 / (sum_ratio_02 +0.00001), 0, 1)
+        im = np.clip(ratio_1 / (sum_ratio_02 + 0.00001) / 3 , 0, 1)
         im[im < 0.195] = 0
+        # return im
         return np.stack((f_channel,im,l_channel),axis=2)
 
     def adjust_img(self,img):
@@ -35,18 +37,20 @@ class utils:
         plt.show()
 
 
-# origin = cv2.imread("F0020.jpg")
-# # origin = cv2.imread("A1372.jpg")
-# origin = cv2.imread("B0011.jpg")
-# # origin = cv2.imread("F1344.jpg")
-# origin = cv2.resize(origin,(600,500))
-# # print(origin.shape)
-# util = utils()
-# im = util.green_scaling(origin)
-# plt.imshow(im)
-# ratio = np.sum(im > 0.1) / np.multiply(im.shape[0],im.shape[1])
-# plt.title(ratio)
-# plt.show()
+import glob
+
+util = utils()
+for img in glob.glob("imgs/*"):
+    if img.split('\\')[-1] != "F1683-0.jpg":
+        continue
+    origin = cv2.resize(cv2.imread(img),(600,500))
+    im = util.green_scaling(origin)
+    cv2.imwrite("test.jpg",im*255)
+    plt.imshow(im)
+    ratio = np.sum(im > 0.1) / np.multiply(im.shape[0],im.shape[1])
+    plt.title(ratio)
+    plt.show()
+    break
 
 #
 # img = util.construct_img(0,180,0)
