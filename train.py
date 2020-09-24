@@ -20,13 +20,16 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.model_selection import GridSearchCV
 from keras.layers import Dense, Activation, BatchNormalization, Conv2D, MaxPooling2D, AveragePooling2D, Flatten, Dropout
 from keras import Sequential
+from keras.layers import *
 from keras import optimizers
 import time
 import math
+import keras
 from keras.preprocessing.image import ImageDataGenerator
 from keras.models import model_from_json
 from keras.callbacks import ModelCheckpoint
 from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import OneHotEncoder
 
 param_grid = {
     'max_depth': [80, 90, 100, 110],
@@ -69,10 +72,15 @@ class LaiModel(utils):
         self.model.fit()
         # self.model.
 
-    def init_labels(self):
+    def init_labels(self,label_scale=False):
+        period = list("ABCDEFT")
+        encoder = OneHotEncoder()
+        encoder.fit(np.array(period).reshape(((-1,1))))
+        self.encoder = encoder
         lb = pd.read_csv("labels_bin.csv", index_col=0)
-        self.scaler = StandardScaler()
-        lb['LAI'] = self.scaler.fit_transform(lb["LAI"].values.reshape([-1,1]))
+        if label_scale:
+            self.scaler = StandardScaler()
+            lb['LAI'] = self.scaler.fit_transform(lb["LAI"].values.reshape([-1,1]))
         for record in lb.to_records():
             self.name2lai.update({record[1]: round(record[2], 3)})
             self.name2bin.update({record[1]: round(record[3], 3)})
@@ -114,6 +122,39 @@ class LaiModel(utils):
         self.model = model
         return model
 
+    def build_model_mul(self):
+        imginput = Input(shape=(600,500,1))
+        featureinput = Input(shape=(7,))
+        x1 = Conv2D(64,3,activation="relu")(imginput)
+        x2 = Conv2D(64,3,activation="relu")(x1)
+        p1 = MaxPooling2D()(x2)
+        x3 = Conv2D(128,3,activation="relu")(p1)
+        x4 = Conv2D(128,3,activation="relu")(x3)
+        p2 = MaxPooling2D()(x4)
+        x5 = Conv2D(256,3,activation="relu")(p2)
+        x6 = Conv2D(258,3,activation="relu")(x5)
+        p3 = MaxPooling2D()(x6)
+        x7 = Conv2D(512,3, activation="relu")(p3)
+        x8 = Conv2D(512,3, activation="relu")(x7)
+        p4 = MaxPooling2D()(x8)
+        x9 = Conv2D(512,3, activation="relu")(p4)
+        x10 = Conv2D(512,3, activation="relu")(x9)
+        p5 = MaxPooling2D()(x10)
+        imgfeature=Flatten()(p5)
+        oo=concatenate([imgfeature,featureinput])
+        f1 = Dense(128)(oo)
+        f2 = Dense(1)(f1)
+        model = keras.Model(
+            inputs=[imginput, featureinput],
+            outputs=[f2],
+        )
+        model.compile(loss='mean_squared_error',
+                      optimizer=optimizers.RMSprop(lr=1e-4),
+                      metrics=['mean_squared_error'])
+        self.model = model
+
+
+
     def steps_counter(self, dsrc):
         dsrc = dsrc if isinstance(dsrc, list) else glob.glob(f"{dsrc}/*")
         assert isinstance(dsrc, list) and len(dsrc) > 0, "empty diretory error"
@@ -121,7 +162,7 @@ class LaiModel(utils):
         steps = math.ceil(length // self.batch_size)
         return steps
 
-    def img_gen(self, dsrc, batch_size, epochs=-1,resize=(500,600), img_no=False,raw_img=False):
+    def img_gen(self, dsrc, batch_size, epochs=-1,resize=(500,600), img_no=False,raw_img=False,scale=False,onehot=False):
         """
         generate batch of images constantly
         :param epochs: -1 infinit iteration
@@ -143,21 +184,26 @@ class LaiModel(utils):
                 temp = []
                 tname = []
                 tlabels = []
+                encodeds = []
                 try:
                     for img in batch:
                         origin = cv2.imread(img)
+                        origin = cv2.cvtColor(origin,cv2.COLOR_BGR2GRAY)
                         if raw_img:
                             origin = cv2.resize(origin, resize)
                             origin = self.green_scaling(origin)  # ->np.array
-                        scaled_expand = origin[np.newaxis, :, :, :]
+                        scaled_expand = origin[np.newaxis, :, :]
                         temp.append(scaled_expand)
-                        iname = img.split("/")[-1].split("-")[0]
+                        iname = os.path.basename(img)
+                        iname = iname.split('.')[0].split('-')[0]
                         tlabels.append(self.name2lai[iname])
                         tname.append(iname)
+                        encodeds.append(self.encoder.transform(np.array(iname[0]).reshape((-1,1))).toarray())
                     if img_no:
                         yield np.concatenate(temp), np.array(tlabels).reshape([-1, 1]), tname
                     else:
-                        yield np.concatenate(temp), np.array(tlabels).reshape([-1, 1])
+                        # yield [np.concatenate(temp),], np.array(tlabels).reshape([-1, 1])
+                        yield [np.concatenate(temp), np.concatenate(encodeds)], np.array(tlabels).reshape([-1, 1])
                 except Exception as e:
                     print(repr(e))
 
@@ -166,7 +212,8 @@ class LaiModel(utils):
         train a regerssion model base on vgg16
         :return:
         """
-        self.model_initial_vgg()
+        # self.model_initial_vgg()
+        self.build_model_mul()
         train_gen = self.img_gen(train_dir, self.batch_size)
         val_gen = self.img_gen(val_dir, self.batch_size)
         t1 = time.time()
@@ -204,12 +251,12 @@ class LaiModel(utils):
         :return:
         """
         model = self.load_model("m1", f"ws/{w}.h5")  # type Sequential
-        val_gen = self.img_gen(test_set, batch_size, 1, img_no=True)
+        val_gen = self.img_gen(test_set, batch_size, 1, img_no=True,scale=False)
         l, p, no = [], [], []
         for data, labes, nos in val_gen:
             predicts = model.predict(data)
-            p.extend([x[0] for x in predicts])
-            l.extend([x[0] for x in labes])
+            p.extend([self.scaler.inverse_transform(x)[0] for x in predicts])
+            l.extend([self.scaler.inverse_transform(x)[0] for x in labes])
             no.extend(nos)
         df = pd.DataFrame({"img_no": no, "label": l, "predict": p})
         mse = tf.keras.losses.mean_squared_error(df["label"], df["predict"])
@@ -421,7 +468,7 @@ if __name__ == '__main__':
     # model.evalue_bins_regre()
     # model.separate2bins(green_scale=True)
     model.train_vgg(12,"../imgandlai/scaled","../imgandlai/val")
-    # model.evaluate("12-0.11","../imgandlai/test0")
+    # model.evaluate("12-0.39","../imgandlai/val")
     # model.evaluate_multi_dir("12-0.11","../imgandlai")
     # model.encode()
     # gen = model.img_gen()
