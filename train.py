@@ -26,6 +26,7 @@ import math
 from keras.preprocessing.image import ImageDataGenerator
 from keras.models import model_from_json
 from keras.callbacks import ModelCheckpoint
+from sklearn.preprocessing import StandardScaler
 
 param_grid = {
     'max_depth': [80, 90, 100, 110],
@@ -54,6 +55,7 @@ class LaiModel(utils):
         self.name2lai = {}
         self.name2bin = {}
         self.init_labels()
+
         # self.init_model()
         # self.model_initial_vgg()
 
@@ -69,6 +71,8 @@ class LaiModel(utils):
 
     def init_labels(self):
         lb = pd.read_csv("labels_bin.csv", index_col=0)
+        self.scaler = StandardScaler()
+        lb['LAI'] = self.scaler.fit_transform(lb["LAI"].values.reshape([-1,1]))
         for record in lb.to_records():
             self.name2lai.update({record[1]: round(record[2], 3)})
             self.name2bin.update({record[1]: round(record[3], 3)})
@@ -107,7 +111,7 @@ class LaiModel(utils):
         model.compile(loss='mean_squared_error',
                       optimizer=optimizers.RMSprop(lr=1e-4),
                       metrics=['mean_squared_error'])
-        self.model1 = model
+        self.model = model
         return model
 
     def steps_counter(self, dsrc):
@@ -147,7 +151,7 @@ class LaiModel(utils):
                             origin = self.green_scaling(origin)  # ->np.array
                         scaled_expand = origin[np.newaxis, :, :, :]
                         temp.append(scaled_expand)
-                        iname = img.split("\\")[-1].split("-")[0]
+                        iname = img.split("/")[-1].split("-")[0]
                         tlabels.append(self.name2lai[iname])
                         tname.append(iname)
                     if img_no:
@@ -162,6 +166,7 @@ class LaiModel(utils):
         train a regerssion model base on vgg16
         :return:
         """
+        self.model_initial_vgg()
         train_gen = self.img_gen(train_dir, self.batch_size)
         val_gen = self.img_gen(val_dir, self.batch_size)
         t1 = time.time()
@@ -171,14 +176,14 @@ class LaiModel(utils):
                                      mode='max')
         callbacks_list = [checkpoint]
         print(f"training start \n store dir {filepath}")
-        self.model1.fit_generator(train_gen, self.steps_counter(train_dir), epochs, validation_data=val_gen,
+        self.model.fit_generator(train_gen, self.steps_counter(train_dir), epochs, validation_data=val_gen,
                                   validation_steps=self.steps_counter(val_dir), callbacks=callbacks_list)
         t2 = time.time()
         print(f"process time {t1}-{t2}, total {t2 - t1}")
-        model_json = self.model1.to_json()
+        model_json = self.model.to_json()
         with open("m1", "w") as jsonfile:
             jsonfile.write(model_json)
-        self.model1.save_weights("w1.h5")
+        self.model.save_weights("w1.h5")
 
     def load_model(self, m, weights):
         model_json = open(m, "r")
@@ -412,10 +417,10 @@ class LaiModel(utils):
 df = pd.DataFrame({"data": np.random.normal(1, 2, 100), "id": [1] * 50 + [2] * 50})
 if __name__ == '__main__':
     model = LaiModel()
-    # model.train_bins("ws 3",epochs=20)
-    model.evalue_bins_regre()
+    # model.train_bins("ws3",epochs=20)
+    # model.evalue_bins_regre()
     # model.separate2bins(green_scale=True)
-    # model.train_vgg(12,"../imgandlai/augdata3","../imgandlai/test")
+    model.train_vgg(12,"../imgandlai/scaled","../imgandlai/val")
     # model.evaluate("12-0.11","../imgandlai/test0")
     # model.evaluate_multi_dir("12-0.11","../imgandlai")
     # model.encode()
