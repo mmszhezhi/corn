@@ -5,7 +5,7 @@ import cv2
 from keras.applications import vgg16
 import pandas as pd
 import tensorflow as tf
-# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 from tensorflow.keras.losses import MSE
 from sklearn.metrics import mean_squared_error, r2_score
 from tsfresh import extract_features
@@ -123,7 +123,7 @@ class LaiModel(utils):
         return model
 
     def build_model_mul(self):
-        imginput = Input(shape=(600,500,1))
+        imginput = Input(shape=(500,600,1))
         featureinput = Input(shape=(7,))
         x1 = Conv2D(64,3,activation="relu")(imginput)
         x2 = Conv2D(64,3,activation="relu")(x1)
@@ -188,11 +188,13 @@ class LaiModel(utils):
                 try:
                     for img in batch:
                         origin = cv2.imread(img)
-                        origin = cv2.cvtColor(origin,cv2.COLOR_BGR2GRAY)
+                        origin = origin[:,:,0]
+                        # origin = cv2.cvtColor(origin,cv2.COLOR_BGR2BGRA)
+                        # origin = cv2.cvtColor(origin,cv2.COLOR_BGR2GRAY)
                         if raw_img:
                             origin = cv2.resize(origin, resize)
                             origin = self.green_scaling(origin)  # ->np.array
-                        scaled_expand = origin[np.newaxis, :, :]
+                        scaled_expand = origin[np.newaxis, :, :,np.newaxis]
                         temp.append(scaled_expand)
                         iname = os.path.basename(img)
                         iname = iname.split('.')[0].split('-')[0]
@@ -200,7 +202,7 @@ class LaiModel(utils):
                         tname.append(iname)
                         encodeds.append(self.encoder.transform(np.array(iname[0]).reshape((-1,1))).toarray())
                     if img_no:
-                        yield np.concatenate(temp), np.array(tlabels).reshape([-1, 1]), tname
+                        yield [np.concatenate(temp), np.concatenate(encodeds)], np.array(tlabels).reshape([-1, 1]), tname
                     else:
                         # yield [np.concatenate(temp),], np.array(tlabels).reshape([-1, 1])
                         yield [np.concatenate(temp), np.concatenate(encodeds)], np.array(tlabels).reshape([-1, 1])
@@ -223,8 +225,10 @@ class LaiModel(utils):
                                      mode='max')
         callbacks_list = [checkpoint]
         print(f"training start \n store dir {filepath}")
+        # self.model.fit_generator(train_gen, 12, epochs, validation_data=val_gen,
+        #                           validation_steps=5, callbacks=callbacks_list)
         self.model.fit_generator(train_gen, self.steps_counter(train_dir), epochs, validation_data=val_gen,
-                                  validation_steps=self.steps_counter(val_dir), callbacks=callbacks_list)
+                                 validation_steps=self.steps_counter(val_dir), callbacks=callbacks_list)
         t2 = time.time()
         print(f"process time {t1}-{t2}, total {t2 - t1}")
         model_json = self.model.to_json()
@@ -255,14 +259,14 @@ class LaiModel(utils):
         l, p, no = [], [], []
         for data, labes, nos in val_gen:
             predicts = model.predict(data)
-            p.extend([self.scaler.inverse_transform(x)[0] for x in predicts])
-            l.extend([self.scaler.inverse_transform(x)[0] for x in labes])
+            p.extend([x[0] for x in predicts])
+            l.extend([x[0] for x in labes])
             no.extend(nos)
         df = pd.DataFrame({"img_no": no, "label": l, "predict": p})
         mse = tf.keras.losses.mean_squared_error(df["label"], df["predict"])
         subd = str.split(test_set, '\\')[-1]
         subd = str.split(subd, '/')[-1]
-        df.to_csv(f"{w.split('-')[-1]}-{mse.numpy()}-{subd}.csv")
+        df.to_csv(f"{w.split('-')[-1]}-{round(mse.numpy(),3)}-{subd}.csv")
 
     def evaluate_multi_dir(self, model, dir):
         for subdir in glob.glob(dir + "/*"):
@@ -467,8 +471,8 @@ if __name__ == '__main__':
     # model.train_bins("ws3",epochs=20)
     # model.evalue_bins_regre()
     # model.separate2bins(green_scale=True)
-    model.train_vgg(12,"../imgandlai/scaled","../imgandlai/val")
-    # model.evaluate("12-0.39","../imgandlai/val")
+    # model.train_vgg(12,"../imgandlai/p2","../imgandlai/val",store_dir="/home/herman/Desktop/arepo/corn/ws")
+    model.evaluate("07-0.01","../imgandlai/val")
     # model.evaluate_multi_dir("12-0.11","../imgandlai")
     # model.encode()
     # gen = model.img_gen()

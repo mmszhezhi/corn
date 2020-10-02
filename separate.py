@@ -1,8 +1,11 @@
 import glob
 import shutil
 import os
-dst = f"../imgandlai/test0"
+import numpy as np
+import random
+dst = f"../imgandlai/val"
 os.makedirs(dst,exist_ok=True)
-for img in glob.glob(f"../imgandlai/augdata3/*"):
-    if "0" == img.split("-")[-1].split(".")[0]:
+for img in glob.glob(f"../imgandlai/p2/*"):
+    if random.randint(0,10)>8:
+        print(img)
         shutil.copy(img,dst)

@@ -12,11 +12,12 @@ class utils:
         img[:, :, 2] += t
         return img
 
-    def green_scaling(self,img:np.ndarray,trans=False):
-        assert img.dtype == np.uint8
+    @staticmethod
+    def green_scaling(img:np.ndarray,channel,trans=False):
+        # assert img.dtype == np.uint8
         if trans and img.shape[0] > img.shape[1]:
             img = img.transpose(1,0,2)
-        sumation = img.sum(axis=2)
+        sumation = img.sum(axis=2) + 0.00001
         ratio_02 = np.stack([img[:,:,0] / sumation,img[:,:,2]/sumation],axis=2)
         # ratio_02[ratio_02 >100] = 1
         green_channel = img[:, :, 1]
@@ -27,8 +28,10 @@ class utils:
         l_channel = 0.08*img[:, :, 2] /sumation
         im = np.clip(ratio_1 / (sum_ratio_02 + 0.00001) / 3 , 0, 1)
         im[im < 0.195] = 0
-        # return im
-        return np.stack((f_channel,im,l_channel),axis=2)
+        if channel == 1:
+            return im
+        elif channel ==3:
+            return np.stack((f_channel,im,l_channel),axis=2)
 
     def adjust_img(self,img):
         ad = img[:,:,1]
